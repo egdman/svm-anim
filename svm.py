@@ -6,7 +6,7 @@ import json
 import math
 from collections import deque
 from time import sleep
-from itertools import izip
+from itertools import izip, chain
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(root_dir, 'lib'))
@@ -48,44 +48,57 @@ class vec:
     ))
 
 
-def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW = 1.0, learnRateB = 1.0, regParam = 1.0, maxIters = 10000):
+def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters = 10000):
+  totalNum = float(len(ptsPos) + len(ptsNeg))
+  lambd = 2. / float(regParam * totalNum)
+
+  def labelsPos():
+    return ( 1. for _ in xrange(len(ptsPos)))
+
+  def labelsNeg():
+    return (-1. for _ in xrange(len(ptsNeg)))
+
+  def iterOverData():
+    return izip(chain(ptsNeg, ptsPos), chain(labelsNeg(), labelsPos()))
+
   def planeFunc(x):
     return w.dot(x) + bias
-
-  def isSupport(pt, label):
-    return label * planeFunc(pt) < 1.0
-
-  def updateLossGrad(pts, label, gradW, gradB):
-    for x in pts:
-      isSup = isSupport(x, label)
-      gradW = gradW.plus( x.mul(-label) if isSup else vec(0,0) )
-      gradB += -label if isSup else 0
-    return gradW, gradB
 
   def marginWidth():
     return 2. / w.normSq()
 
-  totalNum = float(len(ptsPos) + len(ptsNeg))
-  lambd = 2. / float(regParam * totalNum)
-  for it in range(maxIters):
+  def cost():
+    return .5*lambd*w.normSq() +\
+    sum((max(0., 1. - label * planeFunc(x)) for x, label in iterOverData())) / totalNum
+
+  def isSupport(pt, label):
+    return label * planeFunc(pt) < 1.0
+
+  def lossGrad():
     gradW, gradB = vec(0, 0), 0
-    gradW, gradB = updateLossGrad(ptsNeg, -1, gradW, gradB)
-    gradW, gradB = updateLossGrad(ptsPos,  1, gradW, gradB)
-    gradW = w.mul(lambd).plus(gradW.mul(1. / totalNum))
-    gradB = gradB / totalNum
+    for x, label in iterOverData():
+      isSup = isSupport(x, label)
+      gradW = gradW.plus( x.mul(-label) if isSup else vec(0,0) ).mul(learnRateW / totalNum)
+      gradB += (-label if isSup else 0) * learnRateB / totalNum
+    return gradW, gradB
 
-    normGradW = gradW.norm()
-    normGradB = abs(gradB)
+  for it in range(maxIters):
+    lossGradW, gradB = lossGrad()
+    gradW = w.mul(lambd * learnRateW).plus(lossGradW)
+
     if it % 100 == 0:
-      print("grad norms: {}, {} | margin width: {}".format(normGradW, normGradB, marginWidth()))
+      print("cost = {} | grad norms: {}, {} | margin width: {}".format(
+        cost(), gradW.norm(), abs(gradB), marginWidth()))
 
+    # update learning rates
     if (it + 1) % int(maxIters / 10) == 0:
       learnRateW *= 0.5
       learnRateB *= 0.5
       print("lrW = {}, lrB = {}".format(learnRateW, learnRateB))
 
-    w = w.minus(gradW.mul(learnRateW))
-    bias = bias - gradB * learnRateB
+    # update w and bias
+    w = w.minus(gradW)
+    bias = bias - gradB
     yield w, bias
 
 
@@ -117,6 +130,23 @@ class Application(tk.Frame):
     self.w_to_c_scale = 1. / self.c_to_w_scale
 
     self.createWidgets()
+    self.create_data()
+
+
+  def create_data(self):
+    centerX = self.canvas_crds_of_origin[0]
+    centerY = self.canvas_crds_of_origin[1]
+    scale = .3 * self.canvas_size[1]
+    self._add_point(centerX - 0.8*scale, centerY - 0.8*scale, 1)
+    self._add_point(centerX - 0.5*scale, centerY - 0.8*scale, 1)
+    self._add_point(centerX - 0.8*scale, centerY - 0.5*scale, 1)
+    self._add_point(centerX - 0.5*scale, centerY - 0.5*scale, 1)
+
+    self._add_point(centerX + 0.8*scale, centerY + 0.8*scale, -1)
+    self._add_point(centerX + 0.5*scale, centerY + 0.8*scale, -1)
+    self._add_point(centerX + 0.8*scale, centerY + 0.5*scale, -1)
+    self._add_point(centerX + 0.5*scale, centerY + 0.5*scale, -1)
+
 
 
 
@@ -203,11 +233,10 @@ class Application(tk.Frame):
 
 
   def _right_up(self, event):
-    if self.line is None: return
-    w, b = self.line
     x = vec(*self.canvas_to_world(event.x, event.y))
-
-    print("x = {}, f(x) = {}".format(x.comps, w.dot(x) + b))
+    print("x = {}, f(x) = {}".format(
+      x.comps,
+      self.line[0].dot(x) + self.line[1] if self.line is not None else "??"))
 
 
 
@@ -223,7 +252,7 @@ class Application(tk.Frame):
     if self.line is None: return
     
     def animate(svm):
-      for _ in range(10):
+      for _ in range(1):
         try:
           self.line = svm.next()
         except StopIteration:
@@ -239,9 +268,13 @@ class Application(tk.Frame):
     (w, bias) = self.line
     print("before: {}, {}".format(w.comps, bias))
     animate(fit_svm(self.pos, self.neg, w, bias,
-      learnRateW = 100. * self.c_to_w_scale,
+      learnRateW = 0.005 / self.c_to_w_scale,
       learnRateB = 1.0,
-      regParam = 1.0
+      regParam = 0.0001 / (self.c_to_w_scale**2),
+      maxIters = 1000
+      # learnRateW = 100. * self.c_to_w_scale,
+      # learnRateB = 1.0,
+      # regParam = 10000. * (self.c_to_w_scale**2)
 
       # learnRate = 0.01, regParam = 10.
     ))
@@ -301,17 +334,18 @@ class Application(tk.Frame):
 
   def get_line_coefs(self, u, v):
     R = v.minus(u).comps
+    w_scale = 0.01 / self.c_to_w_scale
 
     if abs(R[0]) > abs(R[1]):
-      w = [0, 1]
+      w = [0, w_scale]
       unknown_idx = 0
     else:
-      w = [1, 0]
+      w = [w_scale, 0]
       unknown_idx = 1
 
     uidx = unknown_idx
     kidx = 1 - uidx # known idx
-    w[uidx] = -1. * float(R[kidx]) / float(R[uidx])
+    w[uidx] = - w_scale * float(R[kidx]) / float(R[uidx])
     w = vec(*w)
     # w = w.normalized()
     bias = - w.dot(u)
