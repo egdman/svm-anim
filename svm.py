@@ -113,8 +113,8 @@ class Application(tk.Frame):
     self.line_pts_tag = 'line_pts_on_canvas'
     self.supports_tag = 'support_vectors_on_canvas'
     self.datapoints_tag = 'datapoints_on_canvas'
-    self.w_to_c_scale = 100.
-    self.c_to_w_scale = 1. / self.w_to_c_scale
+    self.c_to_w_scale = 0.01
+    self.w_to_c_scale = 1. / self.c_to_w_scale
 
     self.createWidgets()
 
@@ -239,9 +239,10 @@ class Application(tk.Frame):
     (w, bias) = self.line
     print("before: {}, {}".format(w.comps, bias))
     animate(fit_svm(self.pos, self.neg, w, bias,
-      learnRateW = 1.0,
+      learnRateW = 100. * self.c_to_w_scale,
       learnRateB = 1.0,
       regParam = 1.0
+
       # learnRate = 0.01, regParam = 10.
     ))
 
