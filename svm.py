@@ -95,8 +95,8 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
 
     # update learning rates
     if (it + 1) % int(maxIters / 10) == 0:
-      # learnRateW *= 0.5
-      # learnRateB *= 0.5
+      learnRateW *= 0.5
+      learnRateB *= 0.5
       print("lrW = {}, lrB = {}".format(learnRateW, learnRateB))
 
     # update w and bias
@@ -129,7 +129,7 @@ class Application(tk.Frame):
     self.line_pts_tag = 'line_pts_tag'
     self.supports_tag = 'support_vectors_tag'
     self.datapoints_tag = 'datapoints_tag'
-    self.c_to_w_scale = 0.01
+    self.c_to_w_scale = 0.1
     self.w_to_c_scale = 1. / self.c_to_w_scale
 
     self.createWidgets()
@@ -271,9 +271,9 @@ class Application(tk.Frame):
     (w, bias) = self.line
     print("before: {}, {}".format(w.comps, bias))
     animate(fit_svm(self.neg, self.pos, w, bias,
-      learnRateW = 0.0005 / self.c_to_w_scale,
-      learnRateB = 0.1,
-      regParam = 0.0001 / (self.c_to_w_scale**2),
+      learnRateW = 0.0005 / self.c_to_w_scale,     # scales as problem_scale^-1
+      learnRateB = 0.1,                            # does not scale
+      regParam = 0.0001 / (self.c_to_w_scale**2),  # scales as problem_scale^-2
       maxIters = 10000
     ))
 
