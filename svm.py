@@ -40,6 +40,9 @@ class vec:
   def __getitem__(self, dim):
     return self.comps[dim]
 
+  def __repr__(self):
+    return self.comps.__repr__()
+
   def cross(u, v):
     return vec(*(
       u[1]*v[2] - u[2]*v[1],
@@ -78,7 +81,7 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
     gradW, gradB = vec(0, 0), 0
     for x, label in iterOverData():
       isSup = isSupport(x, label)
-      gradW = gradW.plus( x.mul(-label) if isSup else vec(0,0) ).mul(learnRateW / totalNum)
+      gradW = gradW.plus( (x.mul(-label) if isSup else vec(0,0)).mul(learnRateW / totalNum) )
       gradB += (-label if isSup else 0) * learnRateB / totalNum
     return gradW, gradB
 
@@ -92,8 +95,8 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
 
     # update learning rates
     if (it + 1) % int(maxIters / 10) == 0:
-      learnRateW *= 0.5
-      learnRateB *= 0.5
+      # learnRateW *= 0.5
+      # learnRateB *= 0.5
       print("lrW = {}, lrB = {}".format(learnRateW, learnRateB))
 
     # update w and bias
@@ -117,20 +120,20 @@ class Application(tk.Frame):
     self.line_color = '#5f5f5f'
     self.pos = []
     self.neg = []
+    self.labels = []
 
     self.line_pts = []
-
     self.line = None
 
-    self.line_tag = 'line_on_canvas'
-    self.line_pts_tag = 'line_pts_on_canvas'
-    self.supports_tag = 'support_vectors_on_canvas'
-    self.datapoints_tag = 'datapoints_on_canvas'
+    self.line_tag = 'line_tag'
+    self.line_pts_tag = 'line_pts_tag'
+    self.supports_tag = 'support_vectors_tag'
+    self.datapoints_tag = 'datapoints_tag'
     self.c_to_w_scale = 0.01
     self.w_to_c_scale = 1. / self.c_to_w_scale
 
     self.createWidgets()
-    self.create_data()
+    # self.create_data()
 
 
   def create_data(self):
@@ -252,7 +255,7 @@ class Application(tk.Frame):
     if self.line is None: return
     
     def animate(svm):
-      for _ in range(1):
+      for _ in range(100):
         try:
           self.line = svm.next()
         except StopIteration:
@@ -267,16 +270,11 @@ class Application(tk.Frame):
 
     (w, bias) = self.line
     print("before: {}, {}".format(w.comps, bias))
-    animate(fit_svm(self.pos, self.neg, w, bias,
-      learnRateW = 0.005 / self.c_to_w_scale,
-      learnRateB = 1.0,
+    animate(fit_svm(self.neg, self.pos, w, bias,
+      learnRateW = 0.0005 / self.c_to_w_scale,
+      learnRateB = 0.1,
       regParam = 0.0001 / (self.c_to_w_scale**2),
-      maxIters = 1000
-      # learnRateW = 100. * self.c_to_w_scale,
-      # learnRateB = 1.0,
-      # regParam = 10000. * (self.c_to_w_scale**2)
-
-      # learnRate = 0.01, regParam = 10.
+      maxIters = 10000
     ))
 
     # def isSupport(x, label):
