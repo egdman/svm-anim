@@ -14,13 +14,13 @@ sys.path.append(os.path.join(root_dir, 'lib'))
 
 class vec:
   def __init__(self, *comps):
-    self.comps = comps
+    self.comps = tuple(float(comp) for comp in comps)
 
   def mul(self, scal):
     return vec(*(comp * scal for comp in self.comps))
 
   def normSq(self):
-    return sum(comp**2 for comp in self.comps)
+    return self.dot(self)
 
   def norm(self):
     return math.sqrt(self.normSq())
@@ -48,7 +48,7 @@ class vec:
     ))
 
 
-def fit_svm(ptsNeg, ptsPos, w, bias, learnRate = 1.0, regParam = 1.0, maxIters = 10000):
+def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW = 1.0, learnRateB = 1.0, regParam = 1.0, maxIters = 10000):
   def planeFunc(x):
     return w.dot(x) + bias
 
@@ -80,11 +80,12 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRate = 1.0, regParam = 1.0, maxIters =
       print("grad norms: {}, {} | margin width: {}".format(normGradW, normGradB, marginWidth()))
 
     if (it + 1) % int(maxIters / 10) == 0:
-      learnRate *= 0.5
-      print("lr = {}".format(learnRate))
+      learnRateW *= 0.5
+      learnRateB *= 0.5
+      print("lrW = {}, lrB = {}".format(learnRateW, learnRateB))
 
-    w = w.minus(gradW.mul(learnRate))
-    bias = bias - gradB * learnRate
+    w = w.minus(gradW.mul(learnRateW))
+    bias = bias - gradB * learnRateB
     yield w, bias
 
 
@@ -124,7 +125,7 @@ class Application(tk.Frame):
         scrollregion=(0, 0, 1200, 900))
 
     self.canvas_size = (int(self.canvas["width"]), int(self.canvas["height"]))
-    self.canvas_crds_of_origin = (.25 * self.canvas_size[0], .75 * self.canvas_size[1])
+    self.canvas_crds_of_origin = (.5 * self.canvas_size[0], .5 * self.canvas_size[1])
 
     # pack root window into OS window and make it fill the entire window
     self.pack(side = tk.LEFT, expand = True, fill = tk.BOTH)
@@ -238,7 +239,9 @@ class Application(tk.Frame):
     (w, bias) = self.line
     print("before: {}, {}".format(w.comps, bias))
     animate(fit_svm(self.pos, self.neg, w, bias,
-      learnRate = 1.0, regParam = 1.0
+      learnRateW = 1.0,
+      learnRateB = 1.0,
+      regParam = 1.0
       # learnRate = 0.01, regParam = 10.
     ))
 
