@@ -6,7 +6,7 @@ import json
 import math
 from collections import deque
 from time import sleep
-from itertools import izip, chain
+from itertools import izip, chain, repeat
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(root_dir, 'lib'))
@@ -54,12 +54,13 @@ class vec:
 def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters = 10000):
   totalNum = float(len(ptsPos) + len(ptsNeg))
   lambd = 2. / float(regParam * totalNum)
+  print("lambda = {}".format(lambd))
 
   def labelsPos():
-    return ( 1. for _ in xrange(len(ptsPos)))
+    return repeat( 1., len(ptsPos))
 
   def labelsNeg():
-    return (-1. for _ in xrange(len(ptsNeg)))
+    return repeat(-1., len(ptsNeg))
 
   def iterOverData():
     return izip(chain(ptsNeg, ptsPos), chain(labelsNeg(), labelsPos()))
@@ -105,6 +106,17 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
     yield w, bias
 
 
+def get_bbox(pts):
+  xl, yl =  float('inf'),  float('inf')
+  xu, yu = -float('inf'), -float('inf')
+  for pt in pts:
+    xl = min(xl, pt[0])
+    yl = min(yl, pt[1])
+    xu = max(xu, pt[0])
+    yu = max(yu, pt[1])
+  return xl, xu, yl, yu
+
+
 def normal_color(norm):
   r = int( 255. * (norm[0] + 1.)*.5 )
   g = int( 255. * (norm[1] + 1.)*.5 )
@@ -129,7 +141,8 @@ class Application(tk.Frame):
     self.line_pts_tag = 'line_pts_tag'
     self.supports_tag = 'support_vectors_tag'
     self.datapoints_tag = 'datapoints_tag'
-    self.c_to_w_scale = 0.1
+    self.bbox_tag = 'bbox_tag'
+    self.c_to_w_scale = 1.0
     self.w_to_c_scale = 1. / self.c_to_w_scale
 
     self.createWidgets()
@@ -250,10 +263,24 @@ class Application(tk.Frame):
       ccrds[0] + size, ccrds[1] + size,
       fill = color, tag = tag)
 
+  def draw_bbox(self, xl, xu, yl, yu):
+    xl, yl = self.world_to_canvas(xl, yl)
+    xu, yu = self.world_to_canvas(xu, yu)
+    self.canvas.delete(self.bbox_tag)
+    self.canvas.create_line(xl, yl, xu, yl, fill = self.line_color, tag = self.bbox_tag)
+    self.canvas.create_line(xl, yl, xl, yu, fill = self.line_color, tag = self.bbox_tag)
+    self.canvas.create_line(xu, yu, xu, yl, fill = self.line_color, tag = self.bbox_tag)
+    self.canvas.create_line(xu, yu, xl, yu, fill = self.line_color, tag = self.bbox_tag)
+
 
   def _update_line(self, event):
+    bbox = get_bbox(chain(self.pos, self.neg))
+    problem_scale = max(abs(bbox[0] - bbox[1]), abs(bbox[2] - bbox[3]))
+    print("scale = {}".format(problem_scale))
+    self.draw_bbox(*bbox)
+
     if self.line is None: return
-    
+
     def animate(svm):
       for _ in range(100):
         try:
@@ -269,11 +296,19 @@ class Application(tk.Frame):
 
 
     (w, bias) = self.line
+    w_scale = 6. / problem_scale
+    w = w.mul(w_scale)
+
     print("before: {}, {}".format(w.comps, bias))
     animate(fit_svm(self.neg, self.pos, w, bias,
-      learnRateW = 0.0005 / self.c_to_w_scale,     # scales as problem_scale^-1
-      learnRateB = 0.1,                            # does not scale
-      regParam = 0.0001 / (self.c_to_w_scale**2),  # scales as problem_scale^-2
+      # learnRateW = 0.0005 / self.c_to_w_scale,     # scales as problem_scale^-1
+      # learnRateB = 0.1,                            # does not scale
+      # regParam = 0.0001 / (self.c_to_w_scale**2),  # scales as problem_scale^-2
+      # maxIters = 10000
+
+      learnRateW = 0.3 / problem_scale,     # scales as problem_scale^-1
+      learnRateB = 0.1,                     # does not scale
+      regParam = 36.0 / (problem_scale**2), # scales as problem_scale^-2
       maxIters = 10000
     ))
 
@@ -332,18 +367,17 @@ class Application(tk.Frame):
 
   def get_line_coefs(self, u, v):
     R = v.minus(u).comps
-    w_scale = 0.01 / self.c_to_w_scale
 
     if abs(R[0]) > abs(R[1]):
-      w = [0, w_scale]
+      w = [0, 1]
       unknown_idx = 0
     else:
-      w = [w_scale, 0]
+      w = [1, 0]
       unknown_idx = 1
 
     uidx = unknown_idx
     kidx = 1 - uidx # known idx
-    w[uidx] = - w_scale * float(R[kidx]) / float(R[uidx])
+    w[uidx] = - float(R[kidx]) / float(R[uidx])
     w = vec(*w)
     # w = w.normalized()
     bias = - w.dot(u)
