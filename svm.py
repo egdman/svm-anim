@@ -296,8 +296,11 @@ class Application(tk.Frame):
 
 
     (w, bias) = self.line
-    w_scale = 6. / problem_scale
-    w = w.mul(w_scale)
+    hyperplane_scale = 6. / problem_scale
+
+    # scale hyperplane
+    w = w.mul(hyperplane_scale)
+    bias *= hyperplane_scale
 
     print("before: {}, {}".format(w.comps, bias))
     animate(fit_svm(self.neg, self.pos, w, bias,
