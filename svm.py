@@ -53,8 +53,8 @@ class vec:
 
 def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters = 10000):
   totalNum = float(len(ptsPos) + len(ptsNeg))
-  lambd = 2. / float(regParam * totalNum)
-  print("lambda = {}".format(lambd))
+  llambda = 2. / float(regParam * totalNum)
+  print("lambda = {}".format(llambda))
 
   def labelsPos():
     return repeat( 1., len(ptsPos))
@@ -62,7 +62,7 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
   def labelsNeg():
     return repeat(-1., len(ptsNeg))
 
-  def iterOverData():
+  def data():
     return izip(chain(ptsNeg, ptsPos), chain(labelsNeg(), labelsPos()))
 
   def planeFunc(x):
@@ -72,15 +72,15 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
     return 2. / w.normSq()
 
   def cost():
-    return .5*lambd*w.normSq() +\
-    sum((max(0., 1. - label * planeFunc(x)) for x, label in iterOverData())) / totalNum
+    return .5*llambda*w.normSq() +\
+    sum((max(0., 1. - label * planeFunc(x)) for x, label in data())) / totalNum
 
   def isSupport(pt, label):
     return label * planeFunc(pt) < 1.0
 
   def lossGrad():
     gradW, gradB = vec(0, 0), 0
-    for x, label in iterOverData():
+    for x, label in data():
       isSup = isSupport(x, label)
       gradW = gradW.plus( (x.mul(-label) if isSup else vec(0,0)).mul(learnRateW / totalNum) )
       gradB += (-label if isSup else 0) * learnRateB / totalNum
@@ -88,7 +88,7 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
 
   for it in range(maxIters):
     lossGradW, gradB = lossGrad()
-    gradW = w.mul(lambd * learnRateW).plus(lossGradW)
+    gradW = w.mul(llambda * learnRateW).plus(lossGradW)
 
     if it % 100 == 0:
       print("cost = {} | grad norms: {}, {} | margin width: {}".format(
@@ -312,7 +312,7 @@ class Application(tk.Frame):
       learnRateW = 0.3 / problem_scale,     # scales as problem_scale^-1
       learnRateB = 0.1,                     # does not scale
       regParam = 36.0 / (problem_scale**2), # scales as problem_scale^-2
-      maxIters = 10000
+      maxIters = 20000
     ))
 
     # def isSupport(x, label):
