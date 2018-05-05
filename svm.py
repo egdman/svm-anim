@@ -9,9 +9,6 @@ from time import sleep
 from itertools import izip, chain, repeat
 from operator import itemgetter
 
-root_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(root_dir, 'lib'))
-
 class vec(object):
     """
     vector of arbitrary size
@@ -214,23 +211,7 @@ class Application(tk.Frame):
     #### EXPERIMENTAL ####
     self.line_pts = [vec(-1, 0), vec(1, 0)]
     self.line = self.get_line_coefs(*self.line_pts)
-
-    # find problem scale
-    bbox_min, bbox_max = vec.aabb(*chain(self.pos, self.neg))
-    bbox_diag = bbox_max - bbox_min
-    problem_scale = max(bbox_diag[0], bbox_diag[1])
-    print("problem_scale = {}".format(problem_scale))
-    self.draw_box(bbox_min[0], bbox_max[0], bbox_min[1], bbox_max[1])
-
-    # # scale hyperplane
-    (w, bias) = self.line
-    planeMult = 1. / (w.norm() * problem_scale)
-    w *= planeMult
-    bias *= planeMult
-    self.line = (w, bias)
-
     self.redraw()
-    print("initial line: {}".format(self.line))
     #### #### #### #### ####
 
 
@@ -291,13 +272,13 @@ class Application(tk.Frame):
 
 
   def _get_event_modifiers(self, event):
-    state = {
-      'ctrl': event.state & 0x0004 != 0,
-      'ralt': event.state & 0x0080 != 0,
-      'lalt': event.state & 0x0008 != 0,
-      'shift': event.state & 0x0001 != 0,
-    }
-    return set(modname for modname in state if state[modname])
+    chart = (
+      ('ctrl', 0x0004),
+      ('ralt', 0x0080),
+      ('lalt', 0x0008),
+      ('shift', 0x0001),
+    )
+    return set(modname for (modname, flag) in chart if event.state & flag != 0)
 
 
   def _debg(self, event):
@@ -307,14 +288,13 @@ class Application(tk.Frame):
 
 
   def _add_point(self, cx, cy, label):
-    sz = self.sz
     color = '#aa1111' if label > 0 else '#11aa11'
     categ = self.pos if label > 0 else self.neg
     worldLocation = vec(*self.canvas_to_world(cx, cy))
     print(worldLocation)
 
     categ.append(worldLocation)
-    self.draw_point(categ[-1].comps, sz, color = color, tag = self.datapoints_tag)
+    self.draw_point(categ[-1].comps, self.sz, color = color, tag = self.datapoints_tag)
 
 
   def _ctrl_left_up(self, event):
@@ -341,8 +321,7 @@ class Application(tk.Frame):
   def _right_up(self, event):
     x = vec(*self.canvas_to_world(event.x, event.y))
     print("x = {}, f(x) = {}".format(
-      x.comps,
-      self.line[0].dot(x) + self.line[1] if self.line is not None else "??"))
+      x, self.line[0].dot(x) + self.line[1] if self.line is not None else "??"))
 
 
 
@@ -353,14 +332,14 @@ class Application(tk.Frame):
       ccrds[0] + size, ccrds[1] + size,
       fill = color, tag = tag)
 
-  def draw_box(self, xl, xu, yl, yu):
+  def draw_box(self, xl, xu, yl, yu, canvas_tag):
     xl, yl = self.world_to_canvas(xl, yl)
     xu, yu = self.world_to_canvas(xu, yu)
     self.canvas.delete(self.bbox_tag)
-    self.canvas.create_line(xl, yl, xu, yl, fill = self.line_color, tag = self.bbox_tag)
-    self.canvas.create_line(xl, yl, xl, yu, fill = self.line_color, tag = self.bbox_tag)
-    self.canvas.create_line(xu, yu, xu, yl, fill = self.line_color, tag = self.bbox_tag)
-    self.canvas.create_line(xu, yu, xl, yu, fill = self.line_color, tag = self.bbox_tag)
+    self.canvas.create_line(xl, yl, xu, yl, fill = self.line_color, tag = canvas_tag)
+    self.canvas.create_line(xl, yl, xl, yu, fill = self.line_color, tag = canvas_tag)
+    self.canvas.create_line(xu, yu, xu, yl, fill = self.line_color, tag = canvas_tag)
+    self.canvas.create_line(xu, yu, xl, yu, fill = self.line_color, tag = canvas_tag)
 
 
   def _update_line(self, event):
@@ -372,12 +351,12 @@ class Application(tk.Frame):
           self.line = svm.next()
         except StopIteration:
           (w, bias) = self.line
-          print("after: {}, {}".format(w.comps, bias))
+          print("after: {}, {}".format(w, bias))
           print("margin width = {}".format(2. / w.normSq()))
           return
 
       self.redraw_line()
-      self.canvas.after(1, animate, svm)
+      self.canvas.after(1, animate, svm) # schedule next call
 
 
     # find problem scale
@@ -385,7 +364,7 @@ class Application(tk.Frame):
     bbox_diag = bbox_max - bbox_min
     problem_scale = max(bbox_diag[0], bbox_diag[1])
     print("problem_scale = {}".format(problem_scale))
-    self.draw_box(bbox_min[0], bbox_max[0], bbox_min[1], bbox_max[1])
+    self.draw_box(bbox_min[0], bbox_max[0], bbox_min[1], bbox_max[1], self.bbox_tag)
 
     (w, bias) = self.line
     # # scale hyperplane
@@ -395,13 +374,13 @@ class Application(tk.Frame):
     self.line = (w, bias)
     self.redraw()
 
-    print("before: {}, {}".format(w.comps, bias))
+    print("before: {}, {}".format(w, bias))
 
 
     animate(fit_svm(self.neg, self.pos, w, bias,
-      learnRateW = 0.5 / (problem_scale),     # scales as problem_scale^-1
-      learnRateB = 0.1,                     # does not scale
-      regParam = 100 / (problem_scale**2), 
+      learnRateW = 0.5 / (problem_scale),
+      learnRateB = 0.1,
+      regParam = 100 / (problem_scale**2),
       maxIters = 20000
     ))
 
@@ -415,11 +394,11 @@ class Application(tk.Frame):
     pt2 = vec(*self.world_to_canvas(*pt2.comps))
     pt3 = vec(*self.world_to_canvas(*pt3.comps))
     guide = pt2 - pt1
-    pFar1 = (pt1 + 200 * guide).comps
-    pFar2 = (pt1 - 200 * guide).comps
+    pFar1 = pt1 + 200 * guide
+    pFar2 = pt1 - 200 * guide
 
     self.canvas.delete(self.line_tag)
-    self.canvas.create_line(pt1.comps[0], pt1.comps[1], pt3.comps[0], pt3.comps[1], fill = self.line_color, tag = self.line_tag)
+    self.canvas.create_line(pt1[0], pt1[1], pt3[0], pt3[1], fill = self.line_color, tag = self.line_tag)
     self.canvas.create_line(pFar1[0], pFar1[1], pFar2[0], pFar2[1], fill = 'white', tag = self.line_tag)
 
 
@@ -438,7 +417,7 @@ class Application(tk.Frame):
 
   def get_points_on_line(self, w, bias, spacing = 100):
     pt1 = -bias * w / w.normSq()
-    pt2 = pt1 + spacing * (vec(-w.comps[1], w.comps[0]).normalized())
+    pt2 = pt1 + spacing * (vec(-w[1], w[0]).normalized())
     return pt1, pt2
 
 
@@ -456,9 +435,8 @@ class Application(tk.Frame):
     kidx = 1 - uidx # known idx
     w[uidx] = - float(R[kidx]) / float(R[uidx])
     w = vec(*w)
-    # w = w.normalized()
     bias = - w.dot(u)
-    print("w = {},  bias = {}".format(w.comps, bias))
+    # print("w = {},  bias = {}".format(w, bias))
     return w, bias
 
 
