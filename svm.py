@@ -275,10 +275,11 @@ class Application(tk.Frame):
       (0.17400000000000002, -0.314),
       (-0.012, -0.20600000000000002),
     ]
+    worldScale = 1.0
 
     label = 1
     for wCoords in (wCoordsPos, wCoordsNeg):
-      cCoords = (self.world_to_canvas(x, y) for x, y in wCoords)
+      cCoords = (self.world_to_canvas(x * worldScale, y * worldScale) for x, y in wCoords)
       for x, y in cCoords:
         self._add_point(x, y, label)
 
@@ -429,9 +430,9 @@ class Application(tk.Frame):
 
 
     animate(fit_svm(self.neg, self.pos, w, bias,
-      learnRateW = 0.5 / (problem_scale**2),
-      learnRateB = 0.1,
-      regParam = 100 / (problem_scale**2),
+      learnRateW = 5.0 / (problem_scale**2),
+      learnRateB = 0.5,
+      regParam = 1000 / (problem_scale**2),
       maxIters = 20000
     ))
 
