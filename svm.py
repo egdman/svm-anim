@@ -203,7 +203,7 @@ class Application(tk.Frame):
     self.canvasToWorld = 1. / self.worldToCanvas
 
     self.createWidgets()
-    self.create_data()
+    self.create_data2()
 
     self.line_pts = []
     self.line = None
@@ -232,6 +232,57 @@ class Application(tk.Frame):
     self._add_point(centerX + .25 * scale, centerY + .25 * scale, -1)
 
 
+  def create_data2(self):
+    wCoordsPos = [
+      (-0.766, 0.376),
+      (-0.368, -0.012),
+      (-0.354, 0.098),
+      (-0.546, 0.266),
+      (-0.704, 0.41000000000000003),
+      (-0.536, 0.456),
+      (-0.506, 0.34800000000000003),
+      (-0.744, 0.23800000000000002),
+      (-0.77, 0.17),
+      (-0.508, 0.158),
+      (-0.496, 0.34800000000000003),
+      (-0.72, 0.58),
+      (-0.8180000000000001, 0.6960000000000001),
+      (-0.546, 0.606),
+      (-0.41200000000000003, 0.466),
+      (-0.744, 0.318),
+      (-0.708, 0.296),
+      (-0.388, 0.154),
+    ]
+
+    wCoordsNeg = [
+      (-0.008, 0.056),
+      (0.096, 0.04),
+      (0.08600000000000001, -0.198),
+      (0.016, -0.336),
+      (0.008, -0.15),
+      (-0.032, 0.154),
+      (-0.07200000000000001, 0.23),
+      (0.454, 0.218),
+      (0.28400000000000003, 0.14200000000000002),
+      (-0.056, 0.17200000000000001),
+      (-0.23800000000000002, -0.026000000000000002),
+      (-0.152, -0.146),
+      (0.03, -0.192),
+      (-0.152, -0.38),
+      (-0.032, -0.178),
+      (0.228, -0.018000000000000002),
+      (0.28, -0.246),
+      (0.17400000000000002, -0.314),
+      (-0.012, -0.20600000000000002),
+    ]
+
+    label = 1
+    for wCoords in (wCoordsPos, wCoordsNeg):
+      cCoords = (self.world_to_canvas(x, y) for x, y in wCoords)
+      for x, y in cCoords:
+        self._add_point(x, y, label)
+
+      label *= -1
 
 
   def createWidgets(self):
@@ -291,7 +342,7 @@ class Application(tk.Frame):
     color = '#aa1111' if label > 0 else '#11aa11'
     categ = self.pos if label > 0 else self.neg
     worldLocation = vec(*self.canvas_to_world(cx, cy))
-    print(worldLocation)
+    # print(worldLocation)
 
     categ.append(worldLocation)
     self.draw_point(categ[-1].comps, self.sz, color = color, tag = self.datapoints_tag)
