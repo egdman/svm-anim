@@ -7,54 +7,125 @@ import math
 from collections import deque
 from time import sleep
 from itertools import izip, chain, repeat
+from operator import itemgetter
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(root_dir, 'lib'))
 
+class vec(object):
+    """
+    vector of arbitrary size
+    """
+    def __init__(self, *comps):
+        self.comps = tuple(float(c) for c in comps)
 
-class vec:
-  def __init__(self, *comps):
-    self.comps = tuple(float(comp) for comp in comps)
+    def dot(self, right):
+        return sum((c0 * c1 for (c0, c1) in izip(self.comps, right.comps)))
 
-  def mul(self, scal):
-    return vec(*(comp * scal for comp in self.comps))
+    def normSq(self):
+        return self.dot(self)
 
-  def normSq(self):
-    return self.dot(self)
+    def norm(self):
+        return math.sqrt(self.normSq())
 
-  def norm(self):
-    return math.sqrt(self.normSq())
+    # multiply by a scalar on the right
+    def __mul__(self, right_scalar):
+        return vec(*(c * right_scalar for c in self.comps))
 
-  def normalized(self):
-    return self.mul(1. / self.norm())
+    # multiply by a scalar on the left
+    def __rmul__(self, left_scalar):
+        return vec(*(left_scalar * c for c in self.comps))
 
-  def plus(self, v):
-    return vec(*(self_c + v_c for (self_c, v_c) in zip(self.comps, v.comps)))
+    # negate
+    def __neg__(self):
+        return -1. * self
 
-  def minus(self, v):
-    return self.plus(v.mul(-1))
+    # add vector
+    def __add__(self, right):
+        return vec(*(c0 + c1 for (c0, c1) in izip(self.comps, right.comps)))
 
-  def dot(self, v):
-    return sum(self_c*v_c for self_c, v_c in zip(self.comps, v.comps))
+    # subtract vector
+    def __sub__(self, right):
+        return self + (-right)
 
-  def __getitem__(self, dim):
-    return self.comps[dim]
+    # scalar division
+    def __div__(self, right_scalar):
+        return (1. / right_scalar) * self
 
-  def __repr__(self):
-    return self.comps.__repr__()
+    # [] getter
+    def __getitem__(self, key):
+        return self.comps[key]
 
-  def cross(u, v):
-    return vec(*(
-      u[1]*v[2] - u[2]*v[1],
-      u[2]*v[0] - u[0]*v[2],
-      u[0]*v[1] - u[1]*v[0]
-    ))
+    # equality test
+    def __eq__(self, right):
+        return self.comps == right.comps
+
+    # inequality test
+    def __ne__(self, right):
+        return not self == right
+
+    # hashing support
+    def __hash__(self):
+        return hash(self.comps)
+
+    def __len__(self):
+        return len(self.comps)
+
+    def __repr__(self):
+        return self.comps.__repr__()
+
+    def normalized(self):
+        return self / self.norm()
+
+    def append(self, *tail):
+        return vec(*chain(self.comps, tail))
+
+    def prepend(self, *head):
+        return vec(*chain(head, self.comps))
+
+
+    @staticmethod
+    def aabb(*points):
+        """
+        returns min and max corners of the axis-aligned bounding box of points
+        """
+        ndim = len(points[0].comps)
+        min_corner, max_corner = [], []
+        for dim in range(ndim):
+            min_corner.append(min(points, key = itemgetter(dim)) [dim])
+            max_corner.append(max(points, key = itemgetter(dim)) [dim])
+        return (vec(*min_corner), vec(*max_corner))
+
+    
+    @staticmethod
+    def cross3(u, v):
+        """
+        returns 3d vector
+        requires at least 3d vectors
+        """
+        return vec(
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0])
+
+
+    @staticmethod
+    def cross2(u, v):
+        """
+        returns scalar
+        requires at least 2d vectors
+        """
+        return u[0] * v[1] - u[1] * v[0]
+
+
 
 
 def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters = 10000):
   totalNum = float(len(ptsPos) + len(ptsNeg))
   llambda = 2. / float(regParam * totalNum)
   print("lambda = {}".format(llambda))
+  print("learnRateW = {}".format(learnRateW))
+  print("learnRateB = {}".format(learnRateB))
 
   def labelsPos():
     return repeat( 1., len(ptsPos))
@@ -68,9 +139,6 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
   def planeFunc(x):
     return w.dot(x) + bias
 
-  def marginWidth():
-    return 2. / w.normSq()
-
   def cost():
     return .5*llambda*w.normSq() +\
     sum((max(0., 1. - label * planeFunc(x)) for x, label in data())) / totalNum
@@ -78,43 +146,38 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
   def isSupport(pt, label):
     return label * planeFunc(pt) < 1.0
 
+
   def lossGrad():
     gradW, gradB = vec(0, 0), 0
+    multiplier = 1. / totalNum
     for x, label in data():
       isSup = isSupport(x, label)
-      gradW = gradW.plus( (x.mul(-label) if isSup else vec(0,0)).mul(learnRateW / totalNum) )
-      gradB += (-label if isSup else 0) * learnRateB / totalNum
+      gradW += multiplier * (-label * x if isSup else vec(0,0))
+      gradB += multiplier * (-label if isSup else 0)
     return gradW, gradB
+
 
   for it in range(maxIters):
     lossGradW, gradB = lossGrad()
-    gradW = w.mul(llambda * learnRateW).plus(lossGradW)
+    gradW = llambda * w + lossGradW
 
-    if it % 100 == 0:
-      print("cost = {} | grad norms: {}, {} | margin width: {}".format(
-        cost(), gradW.norm(), abs(gradB), marginWidth()))
+    stepW = gradW * learnRateW
+    stepB = gradB * learnRateB
+
+    if it % int(maxIters / 10) == 0:
+      print("cost = {} | step: {}, {} | margin width: {}".format(
+        cost(), stepW.norm(), stepB, 2. / w.normSq()))
 
     # update learning rates
     if (it + 1) % int(maxIters / 10) == 0:
-      learnRateW *= 0.5
-      learnRateB *= 0.5
+      learnRateW *= 0.9
+      learnRateB *= 0.9
       print("lrW = {}, lrB = {}".format(learnRateW, learnRateB))
 
     # update w and bias
-    w = w.minus(gradW)
-    bias = bias - gradB
+    w -= stepW
+    bias -= stepB
     yield w, bias
-
-
-def get_bbox(pts):
-  xl, yl =  float('inf'),  float('inf')
-  xu, yu = -float('inf'), -float('inf')
-  for pt in pts:
-    xl = min(xl, pt[0])
-    yl = min(yl, pt[1])
-    xu = max(xu, pt[0])
-    yu = max(yu, pt[1])
-  return xl, xu, yl, yu
 
 
 def normal_color(norm):
@@ -132,36 +195,60 @@ class Application(tk.Frame):
     self.line_color = '#5f5f5f'
     self.pos = []
     self.neg = []
-    self.labels = []
-
-    self.line_pts = []
-    self.line = None
 
     self.line_tag = 'line_tag'
     self.line_pts_tag = 'line_pts_tag'
     self.supports_tag = 'support_vectors_tag'
     self.datapoints_tag = 'datapoints_tag'
     self.bbox_tag = 'bbox_tag'
-    self.c_to_w_scale = 1.0
-    self.w_to_c_scale = 1. / self.c_to_w_scale
+
+    self.worldToCanvas = 500.
+    self.canvasToWorld = 1. / self.worldToCanvas
 
     self.createWidgets()
-    # self.create_data()
+    self.create_data()
+
+    self.line_pts = []
+    self.line = None
+
+    #### EXPERIMENTAL ####
+    self.line_pts = [vec(-1, 0), vec(1, 0)]
+    self.line = self.get_line_coefs(*self.line_pts)
+
+    # find problem scale
+    bbox_min, bbox_max = vec.aabb(*chain(self.pos, self.neg))
+    bbox_diag = bbox_max - bbox_min
+    problem_scale = max(bbox_diag[0], bbox_diag[1])
+    print("problem_scale = {}".format(problem_scale))
+    self.draw_box(bbox_min[0], bbox_max[0], bbox_min[1], bbox_max[1])
+
+    # # scale hyperplane
+    (w, bias) = self.line
+    planeMult = 1. / (w.norm() * problem_scale)
+    w *= planeMult
+    bias *= planeMult
+    self.line = (w, bias)
+
+    self.redraw()
+    print("initial line: {}".format(self.line))
+    #### #### #### #### ####
+
 
 
   def create_data(self):
     centerX = self.canvas_crds_of_origin[0]
     centerY = self.canvas_crds_of_origin[1]
-    scale = .3 * self.canvas_size[1]
-    self._add_point(centerX - 0.8*scale, centerY - 0.8*scale, 1)
-    self._add_point(centerX - 0.5*scale, centerY - 0.8*scale, 1)
-    self._add_point(centerX - 0.8*scale, centerY - 0.5*scale, 1)
-    self._add_point(centerX - 0.5*scale, centerY - 0.5*scale, 1)
+    worldScale = 2.0
+    scale = worldScale * self.worldToCanvas
+    self._add_point(centerX - .5 * scale, centerY - .5 * scale, 1)
+    self._add_point(centerX - .25 * scale, centerY - .5 * scale, 1)
+    self._add_point(centerX - .5 * scale, centerY - .25 * scale, 1)
+    self._add_point(centerX - .25 * scale, centerY - .25 * scale, 1)
 
-    self._add_point(centerX + 0.8*scale, centerY + 0.8*scale, -1)
-    self._add_point(centerX + 0.5*scale, centerY + 0.8*scale, -1)
-    self._add_point(centerX + 0.8*scale, centerY + 0.5*scale, -1)
-    self._add_point(centerX + 0.5*scale, centerY + 0.5*scale, -1)
+    self._add_point(centerX + .5 * scale, centerY + .5 * scale, -1)
+    self._add_point(centerX + .25 * scale, centerY + .5 * scale, -1)
+    self._add_point(centerX + .5 * scale, centerY + .25 * scale, -1)
+    self._add_point(centerX + .25 * scale, centerY + .25 * scale, -1)
 
 
 
@@ -202,7 +289,7 @@ class Application(tk.Frame):
     self.canvas.focus_set()
 
 
-  
+
   def _get_event_modifiers(self, event):
     state = {
       'ctrl': event.state & 0x0004 != 0,
@@ -222,9 +309,12 @@ class Application(tk.Frame):
   def _add_point(self, cx, cy, label):
     sz = self.sz
     color = '#aa1111' if label > 0 else '#11aa11'
-    cloud = self.pos if label > 0 else self.neg
-    cloud.append(vec( *self.canvas_to_world(cx, cy) ))
-    self.draw_point(cloud[-1].comps, sz, color = color, tag = self.datapoints_tag)
+    categ = self.pos if label > 0 else self.neg
+    worldLocation = vec(*self.canvas_to_world(cx, cy))
+    print(worldLocation)
+
+    categ.append(worldLocation)
+    self.draw_point(categ[-1].comps, sz, color = color, tag = self.datapoints_tag)
 
 
   def _ctrl_left_up(self, event):
@@ -263,7 +353,7 @@ class Application(tk.Frame):
       ccrds[0] + size, ccrds[1] + size,
       fill = color, tag = tag)
 
-  def draw_bbox(self, xl, xu, yl, yu):
+  def draw_box(self, xl, xu, yl, yu):
     xl, yl = self.world_to_canvas(xl, yl)
     xu, yu = self.world_to_canvas(xu, yu)
     self.canvas.delete(self.bbox_tag)
@@ -274,11 +364,6 @@ class Application(tk.Frame):
 
 
   def _update_line(self, event):
-    bbox = get_bbox(chain(self.pos, self.neg))
-    problem_scale = max(abs(bbox[0] - bbox[1]), abs(bbox[2] - bbox[3]))
-    print("scale = {}".format(problem_scale))
-    self.draw_bbox(*bbox)
-
     if self.line is None: return
 
     def animate(svm):
@@ -295,54 +380,43 @@ class Application(tk.Frame):
       self.canvas.after(1, animate, svm)
 
 
-    (w, bias) = self.line
-    hyperplane_scale = 6. / problem_scale
+    # find problem scale
+    bbox_min, bbox_max = vec.aabb(*chain(self.pos, self.neg))
+    bbox_diag = bbox_max - bbox_min
+    problem_scale = max(bbox_diag[0], bbox_diag[1])
+    print("problem_scale = {}".format(problem_scale))
+    self.draw_box(bbox_min[0], bbox_max[0], bbox_min[1], bbox_max[1])
 
-    # scale hyperplane
-    w = w.mul(hyperplane_scale)
-    bias *= hyperplane_scale
+    (w, bias) = self.line
+    # # scale hyperplane
+    planeMult = 1. / (w.norm() * problem_scale)
+    w *= planeMult
+    bias *= planeMult
+    self.line = (w, bias)
+    self.redraw()
 
     print("before: {}, {}".format(w.comps, bias))
-    animate(fit_svm(self.neg, self.pos, w, bias,
-      # learnRateW = 0.0005 / self.c_to_w_scale,     # scales as problem_scale^-1
-      # learnRateB = 0.1,                            # does not scale
-      # regParam = 0.0001 / (self.c_to_w_scale**2),  # scales as problem_scale^-2
-      # maxIters = 10000
 
-      learnRateW = 0.3 / problem_scale,     # scales as problem_scale^-1
+
+    animate(fit_svm(self.neg, self.pos, w, bias,
+      learnRateW = 0.5 / (problem_scale),     # scales as problem_scale^-1
       learnRateB = 0.1,                     # does not scale
-      regParam = 36.0 / (problem_scale**2), # scales as problem_scale^-2
+      regParam = 100 / (problem_scale**2), 
       maxIters = 20000
     ))
-
-    # def isSupport(x, label):
-    #   val = w.dot(x) + bias
-    #   return val*label < 1.1
-
-    # supports = []
-    # for x in self.neg:
-    #   if isSupport(x, -1):
-    #     supports.append(x)
-    # for x in self.pos:
-    #   if isSupport(x, 1):
-    #     supports.append(x)
-
-    # self.canvas.delete(self.supports_tag)
-    # for sv in supports:
-    #   self.draw_point(sv.comps, 4, 'grey', self.supports_tag)
 
 
   def redraw_line(self):
     if self.line is None: return
     (w, bias) = self.line
     pt1, pt2 = self.get_points_on_line(w, bias, spacing = 10)
-    pt3 = pt1.plus(w)
+    pt3 = pt1 + w
     pt1 = vec(*self.world_to_canvas(*pt1.comps))
     pt2 = vec(*self.world_to_canvas(*pt2.comps))
     pt3 = vec(*self.world_to_canvas(*pt3.comps))
-    guide = pt2.minus(pt1)
-    pFar1 = pt1.plus(guide.mul(200)).comps
-    pFar2 = pt1.plus(guide.mul(-200)).comps
+    guide = pt2 - pt1
+    pFar1 = (pt1 + 200 * guide).comps
+    pFar2 = (pt1 - 200 * guide).comps
 
     self.canvas.delete(self.line_tag)
     self.canvas.create_line(pt1.comps[0], pt1.comps[1], pt3.comps[0], pt3.comps[1], fill = self.line_color, tag = self.line_tag)
@@ -363,13 +437,13 @@ class Application(tk.Frame):
 
 
   def get_points_on_line(self, w, bias, spacing = 100):
-    pt1 = w.mul(-bias / w.normSq())
-    pt2 = pt1.plus(vec(-w.comps[1], w.comps[0]).normalized().mul(spacing))
+    pt1 = -bias * w / w.normSq()
+    pt2 = pt1 + spacing * (vec(-w.comps[1], w.comps[0]).normalized())
     return pt1, pt2
 
 
   def get_line_coefs(self, u, v):
-    R = v.minus(u).comps
+    R = (v - u).comps
 
     if abs(R[0]) > abs(R[1]):
       w = [0, 1]
@@ -391,11 +465,11 @@ class Application(tk.Frame):
   def canvas_to_world(self, x, y):
     x -= self.canvas_crds_of_origin[0]
     y -= self.canvas_crds_of_origin[1]
-    return x * self.c_to_w_scale, -y * self.c_to_w_scale
+    return x * self.canvasToWorld, -y * self.canvasToWorld
 
   def world_to_canvas(self, x, y):
-    x *= self.w_to_c_scale
-    y *= - self.w_to_c_scale
+    x *= self.worldToCanvas
+    y *= - self.worldToCanvas
     return x + self.canvas_crds_of_origin[0], y + self.canvas_crds_of_origin[1]
 
 
