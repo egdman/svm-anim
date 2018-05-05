@@ -378,7 +378,7 @@ class Application(tk.Frame):
 
 
     animate(fit_svm(self.neg, self.pos, w, bias,
-      learnRateW = 0.5 / (problem_scale),
+      learnRateW = 0.5 / (problem_scale**2),
       learnRateB = 0.1,
       regParam = 100 / (problem_scale**2),
       maxIters = 20000
