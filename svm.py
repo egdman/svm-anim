@@ -148,15 +148,16 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
     gradW, gradB = vec(0, 0), 0
     multiplier = 1. / totalNum
     for x, label in data():
-      isSup = isSupport(x, label)
-      gradW += multiplier * (-label * x if isSup else vec(0,0))
-      gradB += multiplier * (-label if isSup else 0)
+      if not isSupport(x, label): continue
+      gradW += - multiplier * label * x
+      gradB += - multiplier * label
+
+    gradW += llambda * w
     return gradW, gradB
 
 
   for it in range(maxIters):
-    lossGradW, gradB = lossGrad()
-    gradW = llambda * w + lossGradW
+    gradW, gradB = lossGrad()
 
     stepW = gradW * learnRateW
     stepB = gradB * learnRateB
