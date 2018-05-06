@@ -430,10 +430,10 @@ class Application(tk.Frame):
 
 
     animate(fit_svm(self.neg, self.pos, w, bias,
-      learnRateW = 5.0 / (problem_scale**2),
-      learnRateB = 0.5,
+      learnRateW = 50.0 / (problem_scale**2),
+      learnRateB = 5.0,
       regParam = 1000 / (problem_scale**2),
-      maxIters = 20000
+      maxIters = 2000
     ))
 
 
@@ -487,7 +487,12 @@ class Application(tk.Frame):
     kidx = 1 - uidx # known idx
     w[uidx] = - float(R[kidx]) / float(R[uidx])
     w = vec(*w)
+
     bias = - w.dot(u)
+    wNorm = w.norm()
+    w /= wNorm
+    bias /= wNorm
+
     # print("w = {},  bias = {}".format(w, bias))
     return w, bias
 
