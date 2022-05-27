@@ -1,12 +1,12 @@
 import os
 import sys
-import Tkinter as tk
-from tkFont import Font as font
+import traceback
+import tkinter as tk
 import json
 import math
 from collections import deque
 from time import sleep
-from itertools import izip, chain, repeat
+from itertools import chain, repeat
 from operator import itemgetter
 
 class vec(object):
@@ -17,13 +17,13 @@ class vec(object):
         self.comps = tuple(float(c) for c in comps)
 
     def dot(self, right):
-        return sum((c0 * c1 for (c0, c1) in izip(self.comps, right.comps)))
+        return sum((c0 * c1 for (c0, c1) in zip(self.comps, right.comps)))
 
     def normSq(self):
         return self.dot(self)
 
     def norm(self):
-        return math.sqrt(self.normSq())
+        return math.sqrt(self.dot(self))
 
     # multiply by a scalar on the right
     def __mul__(self, right_scalar):
@@ -35,19 +35,20 @@ class vec(object):
 
     # negate
     def __neg__(self):
-        return -1. * self
+        return vec(*(-c for c in self.comps))
 
     # add vector
     def __add__(self, right):
-        return vec(*(c0 + c1 for (c0, c1) in izip(self.comps, right.comps)))
+        return vec(*(c0 + c1 for (c0, c1) in zip(self.comps, right.comps)))
 
     # subtract vector
     def __sub__(self, right):
-        return self + (-right)
+        return vec(*(c0 - c1 for (c0, c1) in zip(self.comps, right.comps)))
 
     # scalar division
-    def __div__(self, right_scalar):
-        return (1. / right_scalar) * self
+    def __truediv__(self, right_scalar):
+        a = 1. / right_scalar
+        return vec(*(a * c for c in self.comps))
 
     # [] getter
     def __getitem__(self, key):
@@ -59,7 +60,7 @@ class vec(object):
 
     # inequality test
     def __ne__(self, right):
-        return not self == right
+        return self.comps != right.comps
 
     # hashing support
     def __hash__(self):
@@ -72,7 +73,8 @@ class vec(object):
         return self.comps.__repr__()
 
     def normalized(self):
-        return self / self.norm()
+        a = 1. / math.sqrt(self.dot(self))
+        return vec(*(a * c for c in self.comps))
 
     def append(self, *tail):
         return vec(*chain(self.comps, tail))
@@ -93,7 +95,7 @@ class vec(object):
             max_corner.append(max(points, key = itemgetter(dim)) [dim])
         return (vec(*min_corner), vec(*max_corner))
 
-    
+
     @staticmethod
     def cross3(u, v):
         """
@@ -131,7 +133,7 @@ def fit_svm(ptsNeg, ptsPos, w, bias, learnRateW, learnRateB, regParam, maxIters 
     return repeat(-1., len(ptsNeg))
 
   def data():
-    return izip(chain(ptsNeg, ptsPos), chain(labelsNeg(), labelsPos()))
+    return zip(chain(ptsNeg, ptsPos), chain(labelsNeg(), labelsPos()))
 
   def planeFunc(x):
     return w.dot(x) + bias
@@ -401,7 +403,7 @@ class Application(tk.Frame):
     def animate(svm):
       for _ in range(100):
         try:
-          self.line = svm.next()
+          self.line = next(svm)
         except StopIteration:
           (w, bias) = self.line
           print("after: {}, {}".format(w, bias))
@@ -517,8 +519,9 @@ class ProvideException(object):
         try:
             return self._func(*args)
 
-        except StandardError, e:
+        except Exception as e:
           print('Exception was thrown: {}'.format(e))
+          traceback.print_exc()
 
 
 
@@ -526,7 +529,7 @@ class ProvideException(object):
 def main():
   app = Application()
   app.master.title('svm')
-  app.mainloop() 
+  app.mainloop()
 
 
 if __name__ == '__main__':
